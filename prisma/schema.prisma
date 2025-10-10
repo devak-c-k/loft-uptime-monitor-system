@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CheckStatus {
+  UP
+  DOWN
+}
+
+model endpoints {
+  id         String     @id @default(uuid()) @db.Uuid
+  name       String     @unique
+  url        String     @unique
+  type       String
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+
+  checks     checks[]
+
+  @@map("endpoints")
+}
+
+model checks {
+  id            String      @id @default(uuid()) @db.Uuid
+  endpoint_id   String      @db.Uuid
+  endpoint      endpoints   @relation(fields: [endpoint_id], references: [id], onDelete: Cascade)
+  status        CheckStatus
+  http_code     Int?
+  response_time Int?        // milliseconds
+  error_message String?
+  checked_at    DateTime    @default(now())
+
+  @@index([endpoint_id, checked_at])
+  @@index([checked_at])
+  @@map("checks")
+}
