@@ -129,18 +129,6 @@ export function StatusProvider({ children }: StatusProviderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start scheduler on mount
-  useEffect(() => {
-    const startScheduler = async () => {
-      try {
-        await statusService.startScheduler();
-      } catch (err) {
-        console.error("Failed to start scheduler:", err);
-      }
-    };
-    
-    startScheduler();
-  }, []);
 
   return (
     <StatusContext.Provider

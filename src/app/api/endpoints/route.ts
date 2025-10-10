@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/endpoints
  * Get all monitored endpoints
+ * Public endpoint - no authentication required
  */
 export async function GET() {
   try {
@@ -129,7 +130,7 @@ export async function GET() {
       },
     });
 
-    // Transform snake_case to camelCase for frontend
+    
     const transformedEndpoints = endpoints.map((endpoint) => ({
       id: endpoint.id,
       name: endpoint.name,

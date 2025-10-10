@@ -89,12 +89,27 @@ export async function GET(request: Request) {
       ? Math.min(...responseTimes) 
       : 0;
 
-    // Group by hour for hourly chart
+    // Group by hour for hourly chart (UTC-based buckets)
     const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-      const hourStart = new Date(startOfDay);
-      hourStart.setHours(hour, 0, 0, 0);
-      const hourEnd = new Date(startOfDay);
-      hourEnd.setHours(hour, 59, 59, 999);
+      // Create UTC hour boundaries for this date
+      const hourStart = new Date(Date.UTC(
+        targetDate.getUTCFullYear(),
+        targetDate.getUTCMonth(),
+        targetDate.getUTCDate(),
+        hour,
+        0,
+        0,
+        0
+      ));
+      const hourEnd = new Date(Date.UTC(
+        targetDate.getUTCFullYear(),
+        targetDate.getUTCMonth(),
+        targetDate.getUTCDate(),
+        hour,
+        59,
+        59,
+        999
+      ));
 
       const hourChecks = checks.filter(c => {
         const checkTime = new Date(c.checked_at);
@@ -112,7 +127,8 @@ export async function GET(request: Request) {
         : null;
 
       return {
-        hour: `${hour.toString().padStart(2, '0')}:00`,
+        hour: hour, // Send numeric UTC hour (0-23)
+        hourISO: hourStart.toISOString(), // Full UTC timestamp for this hour bucket
         totalChecks: hourChecks.length,
         upChecks: hourUp,
         downChecks: hourDown,
@@ -123,17 +139,12 @@ export async function GET(request: Request) {
       };
     }).filter(h => h.totalChecks > 0); // Only return hours with data
 
-    // Get incidents (downtime periods)
+    // Get incidents (downtime periods) - send raw timestamps
     const incidents = checks
       .filter(c => c.status === "DOWN")
       .map(c => ({
-        time: new Date(c.checked_at).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        }),
+        timestamp: c.checked_at, // Send UTC timestamp, format in frontend
         error: c.error_message || "Service unavailable",
-        timestamp: c.checked_at,
       }));
 
     // Format checks for timeline

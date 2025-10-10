@@ -9,6 +9,9 @@ import {
     ChartTooltipContent,
 } from "@/components/ui/chart";
 import { dayDetailService, DayDetailData } from "@/services/dayDetailService";
+import { useTimezone } from "@/contexts/TimezoneContext";
+import { formatTimeInTimezone, formatChartHour, getHourInTimezone } from "@/lib/timezone";
+import TimezoneSelector from "@/components/TimezoneSelector";
 
 interface DayDetailPanelProps {
     endpointId: string;
@@ -30,6 +33,7 @@ export default function DayDetailPanel({
     date,
     onClose,
 }: DayDetailPanelProps) {
+    const { timezone } = useTimezone();
     const [data, setData] = useState<DayDetailData>({
         hasData: false,
     });
@@ -94,13 +98,26 @@ export default function DayDetailPanel({
         );
     }
 
-    // Transform hourly data for Recharts
-    const chartData = data.hourlyData?.map((hour) => ({
-        hour: hour.hour,
-        responseTime: hour.avgResponseTime || 0,
-        uptime: hour.uptimePercent || 0,
-        incidents: hour.downChecks,
-    })) || [];
+    // Transform hourly data for Recharts with timezone conversion
+    const chartData = (data.hourlyData?.map((hourBucket) => {
+        // Backend sends UTC hour bucket with ISO timestamp
+        const utcHourISO = hourBucket.hourISO; // e.g., "2025-10-10T16:00:00.000Z"
+        const utcDate = new Date(utcHourISO);
+        
+        // Convert to selected timezone and format as HH:mm
+        const tzLabel = formatTimeInTimezone(utcDate, timezone, 'time'); // e.g., "21:30" for IST
+        const tzHour = getHourInTimezone(utcDate, timezone);
+        
+        return {
+            hour: formatChartHour(tzHour), // internal key
+            label: tzLabel,                 // display on X axis and tooltip
+            utcHour: hourBucket.hour,       // preserve UTC hour for reference
+            hourValue: hourBucket.hour,     // sort by UTC hour order
+            responseTime: hourBucket.avgResponseTime || 0,
+            uptime: hourBucket.uptimePercent || 0,
+            incidents: hourBucket.downChecks,
+        };
+    }) || []).sort((a, b) => a.hourValue - b.hourValue);
 
     const maxResponseTime = Math.max(
         ...(data.hourlyData?.map(h => h.avgResponseTime || 0) || [0]),
@@ -111,54 +128,59 @@ export default function DayDetailPanel({
         <div className="fixed right-0 top-0 h-full w-[500px] bg-white shadow-2xl border-l border-gray-200 z-50 overflow-y-auto">
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                         <h2 className="text-lg font-bold text-gray-900 mb-1">{endpointName}</h2>
-                        <p className="text-xs text-gray-500 mb-3">{data.endpoint?.url}</p>
-                        <div className="flex flex-col gap-2">
-                            <div className="text-xs text-gray-400">
-                                {data.dateFormatted}
-                            </div>
-                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full w-fit ${
-                                (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
-                                    ? 'bg-green-50'
-                                    : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
-                                    ? 'bg-yellow-50'
-                                    : 'bg-red-50'
-                            }`}>
-                                <span className={`w-2 h-2 rounded-full ${
-                                    (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
-                                        ? 'bg-green-500'
-                                        : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
-                                        ? 'bg-yellow-500'
-                                        : 'bg-red-500'
-                                }`}></span>
-                                <span className={`text-xs font-medium ${
-                                    (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
-                                        ? 'text-green-700'
-                                        : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
-                                        ? 'text-yellow-700'
-                                        : 'text-red-700'
-                                }`}>
-                                    {(data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
-                                        ? 'Site was up all day'
-                                        : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
-                                        ? `Site had ${data.summary?.downChecks} incident${data.summary?.downChecks !== 1 ? 's' : ''}`
-                                        : `Site experienced ${data.summary?.downChecks} downtime${data.summary?.downChecks !== 1 ? 's' : ''}`
-                                    }
-                                </span>
-                            </div>
-                        </div>
+                        <p className="text-xs text-gray-500">{data.endpoint?.url}</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 ml-4"
-                        title="Close panel"
+                        className="text-gray-400 hover:text-gray-600 transition-colors p-1 ml-2"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
+                </div>
+
+                {/* Timezone Selector */}
+                <div className="mb-3">
+                    <TimezoneSelector />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <div className="text-xs text-gray-400">
+                        {data.dateFormatted}
+                    </div>
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full w-fit ${
+                        (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
+                            ? 'bg-green-50'
+                            : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
+                            ? 'bg-yellow-50'
+                            : 'bg-red-50'
+                    }`}>
+                        <span className={`w-2 h-2 rounded-full ${
+                            (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
+                                ? 'bg-green-500'
+                                : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
+                                ? 'bg-yellow-500'
+                                : 'bg-red-500'
+                        }`}></span>
+                        <span className={`text-xs font-medium ${
+                            (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
+                                ? 'text-green-700'
+                                : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
+                                ? 'text-yellow-700'
+                                : 'text-red-700'
+                        }`}>
+                            {(data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) === 100)
+                                ? 'Site was up all day'
+                                : (data.summary?.uptimePercent && parseFloat(data.summary.uptimePercent) >= 95)
+                                ? `Site had ${data.summary?.downChecks} incident${data.summary?.downChecks !== 1 ? 's' : ''}`
+                                : `Site experienced ${data.summary?.downChecks} downtime${data.summary?.downChecks !== 1 ? 's' : ''}`
+                            }
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -198,17 +220,15 @@ export default function DayDetailPanel({
                                 stroke="#e5e7eb"
                             />
                             <XAxis
-                                dataKey="hour"
+                                dataKey="label"
                                 tickLine={false}
                                 axisLine={false}
                                 tickMargin={8}
                                 minTickGap={32}
                                 tick={{ fontSize: 11 }}
                                 tickFormatter={(value) => {
-                                    // Show every 1 hours
-                                    const hour = parseInt(value.split(':')[0]);
-                                    if (hour % 1 === 0) return value;
-                                    return '';
+                                    // value is already formatted as "HH:00"
+                                    return value;
                                 }}
                             />
                             <YAxis
@@ -223,6 +243,7 @@ export default function DayDetailPanel({
                                 content={
                                     <ChartTooltipContent
                                         indicator="dot"
+                                        labelFormatter={(value) => `Time: ${value}`}
                                         formatter={(value, name, item) => (
                                             <div className="flex flex-col gap-1">
                                                 <div className="flex items-center justify-between gap-4">
@@ -275,20 +296,27 @@ export default function DayDetailPanel({
                                 Incidents ({data.incidents.length})
                             </h3>
                             <div className="space-y-3">
-                                {data.incidents.slice(0, 5).map((incident, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-start gap-3 p-3 bg-red-50 border border-red-100 rounded-lg"
-                                    >
-                                        <span className="text-red-500 mt-0.5">⚠</span>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-medium text-red-900 mb-1">
-                                                {incident.time}
+                                {data.incidents.slice(0, 5).map((incident, index) => {
+                                    const incidentTime = formatTimeInTimezone(
+                                        new Date(incident.timestamp),
+                                        timezone,
+                                        'datetime'
+                                    );
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="flex items-start gap-3 p-3 bg-red-50 border border-red-100 rounded-lg"
+                                        >
+                                            <span className="text-red-500 mt-0.5">⚠</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-medium text-red-900 mb-1">
+                                                    {incidentTime}
+                                                </div>
+                                                <div className="text-xs text-red-700 truncate">{incident.error}</div>
                                             </div>
-                                            <div className="text-xs text-red-700 truncate">{incident.error}</div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </>
                     ) : (

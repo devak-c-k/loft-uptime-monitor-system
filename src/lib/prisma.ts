@@ -7,8 +7,8 @@ declare global {
 
 // Prisma configuration for serverless environments (Vercel)
 export const prisma = global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasources: {
+/*   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+ */  datasources: {
     db: {
       url: process.env.DATABASE_URL,
     },

@@ -55,14 +55,7 @@ class StatusService {
     const response = await axios.get<StatusData>(`/api/status?${queryParams}`);
     return response.data;
   }
-
-  /**
-   * Start the monitoring scheduler
-   */
-  async startScheduler(): Promise<void> {
-    await axios.get('/api/scheduler/start');
-  }
-
+  
   /**
    * Calculate earliest and latest data dates from services
    */

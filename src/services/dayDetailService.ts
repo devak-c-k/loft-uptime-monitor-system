@@ -21,7 +21,8 @@ export interface DayDetailData {
     lastCheck: string;
   };
   hourlyData?: Array<{
-    hour: string;
+    hour: number; // UTC hour (0-23)
+    hourISO: string; // Full UTC ISO timestamp
     totalChecks: number;
     upChecks: number;
     downChecks: number;
@@ -29,7 +30,7 @@ export interface DayDetailData {
     avgResponseTime: number | null;
   }>;
   incidents?: Array<{
-    time: string;
+    timestamp: string; // UTC ISO timestamp
     error: string;
   }>;
   timelineData?: Array<{

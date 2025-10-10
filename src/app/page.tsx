@@ -4,8 +4,10 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { StatusProvider, useStatus } from "@/contexts/StatusContext";
+import { TimezoneProvider } from "@/contexts/TimezoneContext";
 import UptimeBar from "@/components/UptimeBar";
 import DayDetailPanel from "@/components/DayDetailPanel";
+import TimezoneSelector from "@/components/TimezoneSelector";
 
 function StatusPageContent() {
   const {
@@ -71,33 +73,19 @@ function StatusPageContent() {
               </p>
             </div>
           </div>
+
+          {/* Right side: Timezone Selector and Dashboard Link */}
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="px-4 py-2 bg-[#FF5A5F] text-white rounded-lg hover:bg-[#FC4C4C] transition-colors text-sm font-medium"
+            >
+              Dashboard
+            </Link>
+          </div>
         </div>
 
-        {/* Overall Status Banner */}
-        {/* <div
-          className={`mb-8 p-6 rounded-lg border-2 ${
-            statusData?.allOperational
-              ? "bg-green-50 border-green-300"
-              : "bg-red-50 border-red-300"
-          }`}
-        >
-          <div className="flex items-center">
-            <span className="text-2xl mr-3">
-              {statusData?.allOperational ? "✓" : "✗"}
-            </span>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {statusData?.allOperational
-                  ? "All Systems Operational"
-                  : "Service Disruption"}
-              </h2>
-              <p className="text-gray-600 mt-1">
-                {statusData?.services.length || 0} service
-                {statusData?.services.length !== 1 ? "s" : ""} monitored
-              </p>
-            </div>
-          </div>
-        </div> */}
+       
 
         {/* Services List */}
         <div className="space-y-6">
@@ -174,12 +162,6 @@ function StatusPageContent() {
               <p className="text-gray-600 mb-4">
                 No endpoints configured yet
               </p>
-              <Link
-                href="/add-endpoint"
-                className="inline-block bg-[#FF5A5F] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#FC4C4C] transition-colors shadow-md"
-              >
-                Add Your First Endpoint
-              </Link>
             </div>
           )}
         </div>
@@ -201,8 +183,10 @@ function StatusPageContent() {
 
 export default function Home() {
   return (
-    <StatusProvider>
-      <StatusPageContent />
-    </StatusProvider>
+    <TimezoneProvider>
+      <StatusProvider>
+        <StatusPageContent />
+      </StatusProvider>
+    </TimezoneProvider>
   );
 }
