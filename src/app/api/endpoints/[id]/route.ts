@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkServiceStatus } from "@/lib/monitoring";
 
 /**
  * GET /api/endpoints/[id]

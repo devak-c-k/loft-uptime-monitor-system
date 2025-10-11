@@ -19,8 +19,9 @@ interface UptimeBarProps {
 export default function UptimeBar({ dailyData, startDate, endDate, onDayClick }: UptimeBarProps) {
   // Generate all days in range (fill gaps with no data)
   const generateAllDays = (): Array<DailyData & { hasData: boolean }> => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // Parse dates in UTC to avoid timezone issues
+    const start = new Date(startDate + 'T00:00:00Z');
+    const end = new Date(endDate + 'T23:59:59Z');
     const dataMap = new Map(dailyData.map(d => [d.date, d]));
     const allDays: Array<DailyData & { hasData: boolean }> = [];
     
@@ -42,7 +43,7 @@ export default function UptimeBar({ dailyData, startDate, endDate, onDayClick }:
         });
       }
       
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
     
     return allDays;

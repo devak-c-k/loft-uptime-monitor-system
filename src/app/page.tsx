@@ -5,11 +5,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { StatusProvider, useStatus } from "@/contexts/StatusContext";
 import { TimezoneProvider } from "@/contexts/TimezoneContext";
+import { useAuth } from "@/contexts/AuthContext";
 import UptimeBar from "@/components/UptimeBar";
 import DayDetailPanel from "@/components/DayDetailPanel";
-import TimezoneSelector from "@/components/TimezoneSelector";
 
 function StatusPageContent() {
+  const { logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const {
     statusData,
     loading,
@@ -23,6 +25,11 @@ function StatusPageContent() {
     formatDateRange,
     handleDayClick,
   } = useStatus();
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await logout();
+  };
 
   if (loading) {
     return (
@@ -74,7 +81,7 @@ function StatusPageContent() {
             </div>
           </div>
 
-          {/* Right side: Timezone Selector and Dashboard Link */}
+          {/* Right side: Timezone Selector, Dashboard Link, and Logout */}
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
@@ -82,6 +89,14 @@ function StatusPageContent() {
             >
               Dashboard
             </Link>
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Logout"
+            >
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
+            </button>
           </div>
         </div>
 
@@ -181,7 +196,26 @@ function StatusPageContent() {
   );
 }
 
-export default function Home() {
+function AuthenticatedContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't load StatusProvider until authenticated (prevents API calls)
+  if (!isAuthenticated) {
+    return null; // AuthModal will show
+  }
+
   return (
     <TimezoneProvider>
       <StatusProvider>
@@ -189,4 +223,8 @@ export default function Home() {
       </StatusProvider>
     </TimezoneProvider>
   );
+}
+
+export default function Home() {
+  return <AuthenticatedContent />;
 }

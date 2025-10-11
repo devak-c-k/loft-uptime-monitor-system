@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EndpointProvider, useEndpoints } from "@/contexts/EndpointContext";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Endpoint } from "@/services/endpointService";
 import EndpointFormModal, { EndpointFormData } from "@/components/dashboard/EndpointFormModal";
 import DeleteConfirmModal from "@/components/dashboard/DeleteConfirmModal";
@@ -172,7 +173,26 @@ function DashboardContent() {
   );
 }
 
-export default function Dashboard() {
+function AuthenticatedDashboard() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't load EndpointProvider until authenticated (prevents API calls)
+  if (!isAuthenticated) {
+    return null; // AuthModal will show
+  }
+
   return (
     <ToastProvider>
       <EndpointProvider>
@@ -180,4 +200,8 @@ export default function Dashboard() {
       </EndpointProvider>
     </ToastProvider>
   );
+}
+
+export default function Dashboard() {
+  return <AuthenticatedDashboard />;
 }

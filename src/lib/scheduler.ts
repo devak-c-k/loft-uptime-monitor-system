@@ -1,6 +1,22 @@
 import cron, { ScheduledTask } from "node-cron";
 import { prisma } from "./prisma";
 import { checkServiceStatus } from "./monitoring";
+import { sendSlackAlert, formatDowntimeAlert, formatRecoveryAlert } from "./slack";
+import { CheckStatus } from "../generated/prisma";
+
+// Track downtime for each endpoint
+interface DowntimeTracker {
+  consecutiveFailures: number;
+  firstFailureTime: Date | null;
+  alertSent: boolean;
+  lastStatus: CheckStatus | null;
+}
+
+const downtimeTrackers = new Map<string, DowntimeTracker>();
+
+// Constants
+const ALERT_THRESHOLD_CHECKS = 4; // 4 failures = 2 minutes (30 seconds * 4)
+const CHECK_INTERVAL_SECONDS = 30;
 
 // Global singleton to ensure only ONE scheduler instance across all server instances
 const SCHEDULER_KEY = Symbol.for("app.monitoring.scheduler");
@@ -59,12 +75,68 @@ export function startMonitoringScheduler() {
           },
         });
         
-        if (result.status === "DOWN") {
-          console.warn(`⚠️ Service DOWN: ${endpoint.name} (${endpoint.url})`);
-          // You can add alert logic here (email, SMS, etc.)
-        } else {
-          console.log(`✓ ${endpoint.name}: ${result.status} (${result.responseTime}ms)`);
+        // Get or initialize downtime tracker for this endpoint
+        if (!downtimeTrackers.has(endpoint.id)) {
+          downtimeTrackers.set(endpoint.id, {
+            consecutiveFailures: 0,
+            firstFailureTime: null,
+            alertSent: false,
+            lastStatus: null,
+          });
         }
+        
+        const tracker = downtimeTrackers.get(endpoint.id)!;
+        
+        if (result.status === CheckStatus.DOWN) {
+          tracker.consecutiveFailures++;
+          
+          // Record first failure time
+          if (tracker.consecutiveFailures === 1) {
+            tracker.firstFailureTime = new Date();
+          }
+          
+          console.warn(`⚠️ Service DOWN: ${endpoint.name} (${endpoint.url}) - Failure ${tracker.consecutiveFailures}/${ALERT_THRESHOLD_CHECKS}`);
+          
+          // Send Slack alert if threshold reached and not already sent
+          if (tracker.consecutiveFailures >= ALERT_THRESHOLD_CHECKS && !tracker.alertSent) {
+            const downtimeMinutes = Math.round((tracker.consecutiveFailures * CHECK_INTERVAL_SECONDS) / 60);
+            const alertMessage = formatDowntimeAlert(
+              endpoint.name,
+              endpoint.url,
+              downtimeMinutes,
+              tracker.firstFailureTime!,
+              result.httpCode || undefined,
+              result.errorMessage || undefined
+            );
+            
+            await sendSlackAlert(alertMessage);
+            tracker.alertSent = true;
+            console.error(`🚨 SLACK ALERT SENT: ${endpoint.name} down for ${downtimeMinutes} minutes`);
+          }
+        } else {
+          // Service is UP
+          console.log(`✓ ${endpoint.name}: ${result.status} (${result.responseTime}ms)`);
+          
+          // If service recovered after being down, send recovery alert
+          if (tracker.lastStatus === CheckStatus.DOWN && tracker.alertSent) {
+            const downtimeDuration = Math.round((tracker.consecutiveFailures * CHECK_INTERVAL_SECONDS) / 60);
+            const recoveryMessage = formatRecoveryAlert(
+              endpoint.name,
+              endpoint.url,
+              downtimeDuration
+            );
+            
+            await sendSlackAlert(recoveryMessage);
+            console.log(`✅ RECOVERY ALERT SENT: ${endpoint.name} back online after ${downtimeDuration} minutes`);
+          }
+          
+          // Reset tracker
+          tracker.consecutiveFailures = 0;
+          tracker.firstFailureTime = null;
+          tracker.alertSent = false;
+        }
+        
+        tracker.lastStatus = result.status;
       }
       
       console.log(`✅ Health check complete: ${endpoints.length} endpoints checked`);
