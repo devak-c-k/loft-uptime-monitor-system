@@ -9,9 +9,7 @@ import {
     ChartTooltipContent,
 } from "@/components/ui/chart";
 import { dayDetailService, DayDetailData } from "@/services/dayDetailService";
-import { useTimezone } from "@/contexts/TimezoneContext";
 import { formatTimeInTimezone, formatChartHour, getHourInTimezone } from "@/lib/timezone";
-import TimezoneSelector from "@/components/TimezoneSelector";
 
 interface DayDetailPanelProps {
     endpointId: string;
@@ -33,7 +31,7 @@ export default function DayDetailPanel({
     date,
     onClose,
 }: DayDetailPanelProps) {
-    const { timezone } = useTimezone();
+    const timezone = "Asia/Kolkata"; // Fixed to IST
     const [data, setData] = useState<DayDetailData>({
         hasData: false,
     });
@@ -99,25 +97,49 @@ export default function DayDetailPanel({
     }
 
     // Transform hourly data for Recharts with timezone conversion
-    const chartData = (data.hourlyData?.map((hourBucket) => {
-        // Backend sends UTC hour bucket with ISO timestamp
-        const utcHourISO = hourBucket.hourISO; // e.g., "2025-10-10T16:00:00.000Z"
-        const utcDate = new Date(utcHourISO);
+    // Ensure all 24 hours (0-23) are represented, PLUS hour 24 (end of day marker)
+    const allHours = Array.from({ length: 25 }, (_, i) => i); // 0 to 24
+    
+    const chartData = allHours.map((hour) => {
+        // Hour 24 represents end of day (00:00 next day) - same as hour 23 data
+        const dataHour = hour === 24 ? 23 : hour;
         
-        // Convert to selected timezone and format as HH:mm
-        const tzLabel = formatTimeInTimezone(utcDate, timezone, 'time'); // e.g., "21:30" for IST
-        const tzHour = getHourInTimezone(utcDate, timezone);
+        // Find matching data from API for this hour
+        const hourData = data.hourlyData?.find(h => h.hour === dataHour);
         
-        return {
-            hour: formatChartHour(tzHour), // internal key
-            label: tzLabel,                 // display on X axis and tooltip
-            utcHour: hourBucket.hour,       // preserve UTC hour for reference
-            hourValue: hourBucket.hour,     // sort by UTC hour order
-            responseTime: hourBucket.avgResponseTime || 0,
-            uptime: hourBucket.uptimePercent || 0,
-            incidents: hourBucket.downChecks,
-        };
-    }) || []).sort((a, b) => a.hourValue - b.hourValue);
+        if (hourData && hour < 24) {
+            const utcHourISO = hourData.hourISO;
+            const utcDate = new Date(utcHourISO);
+            const tzLabel = formatTimeInTimezone(utcDate, timezone, 'time');
+            
+            return {
+                hour: hour,
+                label: tzLabel,
+                responseTime: hourData.avgResponseTime || 0,
+                uptime: hourData.uptimePercent || 0,
+                incidents: hourData.downChecks || 0,
+            };
+        } else if (hour === 24) {
+            // End of day marker (24:00 = 00:00 next day)
+            return {
+                hour: 24,
+                label: '24:00',
+                responseTime: hourData?.avgResponseTime || 0,
+                uptime: hourData?.uptimePercent || 100,
+                incidents: 0,
+            };
+        } else {
+            // No data for this hour - show empty
+            const hourStr = String(hour).padStart(2, '0');
+            return {
+                hour: hour,
+                label: `${hourStr}:00`,
+                responseTime: 0,
+                uptime: 100,
+                incidents: 0,
+            };
+        }
+    });
 
     const maxResponseTime = Math.max(
         ...(data.hourlyData?.map(h => h.avgResponseTime || 0) || [0]),
@@ -143,9 +165,15 @@ export default function DayDetailPanel({
                     </button>
                 </div>
 
-                {/* Timezone Selector */}
-                <div className="mb-3">
-                    <TimezoneSelector />
+                {/* Timezone Indicator (IST Only) */}
+                <div className="mb-3 flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-md">
+                        <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-xs font-medium text-blue-700">India Standard Time (IST)</span>
+                    </div>
+                    <span className="text-xs text-gray-400">UTC+5:30</span>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -222,12 +250,14 @@ export default function DayDetailPanel({
                             <XAxis
                                 dataKey="label"
                                 tickLine={false}
-                                axisLine={false}
+                                axisLine={true}
                                 tickMargin={8}
-                                minTickGap={32}
+                                minTickGap={20}
                                 tick={{ fontSize: 11 }}
+                                domain={['dataMin', 'dataMax']}
+                                ticks={['00:00', '06:00', '12:00', '18:00', '24:00']}
                                 tickFormatter={(value) => {
-                                    // value is already formatted as "HH:00"
+                                    // Show key hours including end of day
                                     return value;
                                 }}
                             />

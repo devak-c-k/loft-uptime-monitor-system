@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/day-detail
- * Get detailed hourly data for a specific day
+ * Get detailed hourly data for a specific day in IST timezone
  * Query params:
  * - endpointId: UUID of the endpoint
- * - date: ISO date string (YYYY-MM-DD)
+ * - date: ISO date string (YYYY-MM-DD) - interpreted as IST date
  */
 export async function GET(request: Request) {
   try {
@@ -21,12 +21,24 @@ export async function GET(request: Request) {
       );
     }
 
-    const targetDate = new Date(dateParam);
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Parse date as IST and convert to UTC for database query
+    // Example: User selects "2025-10-12" (meaning Oct 12 in IST)
+    // IST = UTC+5:30, so:
+    //   Oct 12 00:00 IST = Oct 11 18:30 UTC
+    //   Oct 12 23:59 IST = Oct 12 18:29 UTC
     
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const [year, month, day] = dateParam.split('-').map(Number);
+    
+    // Create UTC midnight for the given date
+    const utcMidnight = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    
+    // IST is UTC+5:30 (5 hours 30 minutes = 330 minutes = 19800000 milliseconds)
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 19800000 ms
+    
+    // To get IST midnight in UTC, we subtract the offset
+    // IST 00:00 = UTC 18:30 (previous day)
+    const startOfDay = new Date(utcMidnight.getTime() - IST_OFFSET_MS);
+    const endOfDay = new Date(startOfDay.getTime() + (24 * 60 * 60 * 1000) - 1); // +24 hours - 1ms
 
     // Get endpoint details
     const endpoint = await prisma.endpoints.findUnique({
@@ -89,31 +101,17 @@ export async function GET(request: Request) {
       ? Math.min(...responseTimes) 
       : 0;
 
-    // Group by hour for hourly chart (UTC-based buckets)
-    const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-      // Create UTC hour boundaries for this date
-      const hourStart = new Date(Date.UTC(
-        targetDate.getUTCFullYear(),
-        targetDate.getUTCMonth(),
-        targetDate.getUTCDate(),
-        hour,
-        0,
-        0,
-        0
-      ));
-      const hourEnd = new Date(Date.UTC(
-        targetDate.getUTCFullYear(),
-        targetDate.getUTCMonth(),
-        targetDate.getUTCDate(),
-        hour,
-        59,
-        59,
-        999
-      ));
+    // Group by hour for hourly chart (IST-based buckets, 00:00 to 23:00 IST)
+    // Each hour bucket represents one hour in IST timezone
+    const hourlyData = Array.from({ length: 24 }, (_, istHour) => {
+      // Calculate the UTC time range for this IST hour
+      // Example: IST hour 0 (00:00-01:00) = UTC hour 18:30-19:30 (previous day)
+      const istHourStart = new Date(startOfDay.getTime() + (istHour * 60 * 60 * 1000));
+      const istHourEnd = new Date(istHourStart.getTime() + (60 * 60 * 1000) - 1);
 
       const hourChecks = checks.filter(c => {
         const checkTime = new Date(c.checked_at);
-        return checkTime >= hourStart && checkTime <= hourEnd;
+        return checkTime >= istHourStart && checkTime <= istHourEnd;
       });
 
       const hourUp = hourChecks.filter(c => c.status === "UP").length;
@@ -127,8 +125,8 @@ export async function GET(request: Request) {
         : null;
 
       return {
-        hour: hour, // Send numeric UTC hour (0-23)
-        hourISO: hourStart.toISOString(), // Full UTC timestamp for this hour bucket
+        hour: istHour, // IST hour (0-23), represents 00:00, 01:00, ... 23:00 IST
+        hourISO: istHourStart.toISOString(), // UTC timestamp for this IST hour bucket start
         totalChecks: hourChecks.length,
         upChecks: hourUp,
         downChecks: hourDown,
@@ -166,12 +164,13 @@ export async function GET(request: Request) {
         name: endpoint.name,
         url: endpoint.url,
       },
-      date: targetDate.toISOString().split('T')[0],
-      dateFormatted: targetDate.toLocaleDateString('en-US', {
+      date: dateParam, // Already in YYYY-MM-DD format
+      dateFormatted: startOfDay.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'UTC', // Format in UTC to match the data
       }),
       summary: {
         totalChecks: checks.length,
