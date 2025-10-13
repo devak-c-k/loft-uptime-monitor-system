@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { prisma } from "@/lib/prisma";
 import { checkServiceStatus } from "@/lib/monitoring";
 import { sendSlackAlert, formatDowntimeAlert, formatRecoveryAlert } from "@/lib/slack";
@@ -25,7 +26,8 @@ const ALERT_THRESHOLD_CHECKS = 3; // 3 consecutive failures = send alert (3 minu
 /**
  * GET /api/cron/monitor
  * 
- * This endpoint is triggered by cron-job.org every minute to check all endpoints.
+ * This endpoint can be triggered by external cron services (cron-job.org, etc.)
+ * or called directly for testing purposes.
  * 
  * Security: Requires CRON_SECRET in Authorization header
  * 
@@ -223,3 +225,24 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/cron/monitor
+ * 
+ * This endpoint is triggered by QStash (Upstash) every 60 seconds to check all endpoints.
+ * QStash automatically verifies the signature using the signing keys.
+ * 
+ * Security: QStash signature verification via verifySignatureAppRouter
+ * 
+ * @example
+ * QStash will automatically send:
+ * POST https://your-domain.vercel.app/api/cron/monitor
+ * Headers: Upstash-Signature, Upstash-Timestamp, etc.
+ */
+async function handler(request: NextRequest) {
+  // Call the same logic as GET
+  return GET(request);
+}
+
+// Wrap POST handler with QStash signature verification
+export const POST = verifySignatureAppRouter(handler);
