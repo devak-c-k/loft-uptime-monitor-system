@@ -26,44 +26,16 @@ const ALERT_THRESHOLD_CHECKS = 3; // 3 consecutive failures = send alert (3 minu
 /**
  * GET /api/cron/monitor
  * 
- * This endpoint can be triggered by external cron services (cron-job.org, etc.)
- * or called directly for testing purposes.
- * 
- * Security: Requires CRON_SECRET in Authorization header
+ * This endpoint can be triggered by external cron services or called directly.
+ * No authentication required - monitoring is public.
  * 
  * @example
- * curl -X GET https://your-domain.vercel.app/api/cron/monitor \
- *   -H "Authorization: Bearer YOUR_CRON_SECRET"
+ * curl -X GET https://your-domain.vercel.app/api/cron/monitor
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    // 🔐 SECURITY: Verify the secret key
-    const authHeader = request.headers.get("authorization");
-    const expectedSecret = process.env.CRON_SECRET;
-
-    if (!expectedSecret) {
-      console.error("❌ CRON_SECRET not configured in environment variables");
-      return NextResponse.json(
-        { error: "Server configuration error" },
-        { status: 500 }
-      );
-    }
-
-    // Check for Bearer token or direct secret
-    const providedSecret = authHeader?.startsWith("Bearer ")
-      ? authHeader.substring(7)
-      : authHeader;
-
-    if (providedSecret !== expectedSecret) {
-      console.warn("⚠️ Unauthorized cron trigger attempt");
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     console.log(`\n🔄 [CRON] Starting monitoring cycle at ${new Date().toISOString()}`);
 
     // Fetch all active endpoints from database
