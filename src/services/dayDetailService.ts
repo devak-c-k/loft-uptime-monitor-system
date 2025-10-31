@@ -33,6 +33,9 @@ export interface DayDetailData {
     timestamp: string; // UTC ISO timestamp
     error: string;
     httpCode?: number | null;
+    responseTime?: number | null;
+    durationMs?: number | null;
+    duration?: string | null;
   }>;
   timelineData?: Array<{
     time: string;

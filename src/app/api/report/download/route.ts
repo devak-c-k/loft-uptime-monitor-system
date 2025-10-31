@@ -86,6 +86,7 @@ export async function GET(request: Request) {
       "Uptime %",
       "Total Checks",
       "Failed Checks",
+      "Downtime Duration",
       "Error Message",
       "Status Code",
     ];
@@ -171,6 +172,20 @@ export async function GET(request: Request) {
           errorMessage = `HTTP ${day.first_http_code}: ${errorMessage}`;
         }
 
+        // Calculate downtime duration (assuming ~1 minute per check)
+        let downtimeDuration = "-";
+        if (downChecks > 0) {
+          const totalMinutes = downChecks; // Approximately 1 check per minute
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          
+          if (hours > 0) {
+            downtimeDuration = `${hours}h ${minutes}m`;
+          } else {
+            downtimeDuration = `${minutes}m`;
+          }
+        }
+
         const row = reportSheet.getRow(currentRow);
         row.values = [
           endpoint.name,
@@ -178,6 +193,7 @@ export async function GET(request: Request) {
           `${uptimePercent}%`,
           totalChecks,
           downChecks,
+          downtimeDuration,
           errorMessage,
           day.first_http_code || "-",
         ];
@@ -264,6 +280,7 @@ export async function GET(request: Request) {
       { width: 12 }, // Uptime
       { width: 15 }, // Total Checks
       { width: 15 }, // Failed Checks
+      { width: 18 }, // Downtime Duration
       { width: 50 }, // Error Message
       { width: 15 }, // Status Code
     ];

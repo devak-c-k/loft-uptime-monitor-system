@@ -138,23 +138,59 @@ export async function GET(request: Request) {
       };
     }).filter(h => h.totalChecks > 0); // Only return hours with data
 
-    // Get incidents (downtime periods) - send raw timestamps with status codes
-    const incidents = checks
-      .filter(c => c.status === "DOWN")
-      .map(c => {
-        let errorMessage = c.error_message || "Service unavailable";
+    // Get incidents (downtime periods) - send raw timestamps with status codes and duration
+    const downtimeChecks = checks.filter(c => c.status === "DOWN");
+    
+    const incidents = downtimeChecks.map((c, index) => {
+      let errorMessage = c.error_message || "Service unavailable";
+      
+      // Only prepend status code if it's not already in the error message
+      if (c.http_code && !errorMessage.startsWith("HTTP")) {
+        errorMessage = `HTTP ${c.http_code}: ${errorMessage}`;
+      }
+      
+      // Calculate duration until recovery (next UP check or end of checks)
+      const currentCheckTime = new Date(c.checked_at).getTime();
+      const nextUpCheck = checks.find((check, idx) => 
+        idx > checks.indexOf(c) && check.status === "UP"
+      );
+      
+      let durationMs = null;
+      let durationFormatted = null;
+      
+      if (nextUpCheck) {
+        const nextUpTime = new Date(nextUpCheck.checked_at).getTime();
+        durationMs = nextUpTime - currentCheckTime;
         
-        // Only prepend status code if it's not already in the error message
-        if (c.http_code && !errorMessage.startsWith("HTTP")) {
-          errorMessage = `HTTP ${c.http_code}: ${errorMessage}`;
+        // Format duration
+        const totalSeconds = Math.floor(durationMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        
+        if (minutes > 0) {
+          durationFormatted = `${minutes}m ${seconds}s`;
+        } else {
+          durationFormatted = `${seconds}s`;
         }
-        
-        return {
-          timestamp: c.checked_at, // Send UTC timestamp, format in frontend
-          error: errorMessage,
-          httpCode: c.http_code,
-        };
-      });
+      } else {
+        // Check if this is the last check or still down
+        const lastCheck = checks[checks.length - 1];
+        if (c.checked_at === lastCheck.checked_at) {
+          durationFormatted = "Ongoing";
+        } else {
+          durationFormatted = "~1m";
+        }
+      }
+      
+      return {
+        timestamp: c.checked_at, // Send UTC timestamp, format in frontend
+        error: errorMessage,
+        httpCode: c.http_code,
+        responseTime: c.response_time, // Response time of the failed check
+        durationMs,
+        duration: durationFormatted,
+      };
+    });
 
     // Format checks for timeline
     const timelineData = checks.map(c => ({
