@@ -56,6 +56,7 @@ export async function GET(request: Request) {
             down_checks: bigint;
             avg_response_time: number | null;
             first_error: string | null;
+            first_http_code: number | null;
           }>
         >`
           WITH daily_aggregates AS (
@@ -74,13 +75,13 @@ export async function GET(request: Request) {
           first_errors AS (
             SELECT DISTINCT ON (DATE(checked_at))
               DATE(checked_at) as date,
-              error_message as first_error
+              error_message as first_error,
+              http_code as first_http_code
             FROM checks
             WHERE endpoint_id = ${endpoint.id}::uuid
               AND checked_at >= ${startDate}
               AND checked_at <= ${endDate}
               AND status = 'DOWN'
-              AND error_message IS NOT NULL
             ORDER BY DATE(checked_at), checked_at ASC
           )
           SELECT 
@@ -89,7 +90,8 @@ export async function GET(request: Request) {
             da.up_checks,
             da.down_checks,
             da.avg_response_time,
-            fe.first_error
+            fe.first_error,
+            fe.first_http_code
           FROM daily_aggregates da
           LEFT JOIN first_errors fe ON da.date = fe.date
           ORDER BY da.date DESC
@@ -120,16 +122,25 @@ export async function GET(request: Request) {
             : null;
 
         // Format daily data for frontend
-        const dailyData = dailyStats.map((day) => ({
-          date: day.date.toISOString().split('T')[0],
-          totalChecks: Number(day.total_checks),
-          upChecks: Number(day.up_checks),
-          downChecks: Number(day.down_checks),
-          uptimePercent: Number(day.total_checks) > 0
-            ? ((Number(day.up_checks) / Number(day.total_checks)) * 100)
-            : 0,
-          errorMessage: day.first_error,
-        }));
+        const dailyData = dailyStats.map((day) => {
+          let errorMessage = day.first_error;
+          
+          // Format error message with status code if available and not already included
+          if (errorMessage && day.first_http_code && !errorMessage.startsWith("HTTP")) {
+            errorMessage = `HTTP ${day.first_http_code}: ${errorMessage}`;
+          }
+          
+          return {
+            date: day.date.toISOString().split('T')[0],
+            totalChecks: Number(day.total_checks),
+            upChecks: Number(day.up_checks),
+            downChecks: Number(day.down_checks),
+            uptimePercent: Number(day.total_checks) > 0
+              ? ((Number(day.up_checks) / Number(day.total_checks)) * 100)
+              : 0,
+            errorMessage,
+          };
+        });
 
         return {
           id: endpoint.id,

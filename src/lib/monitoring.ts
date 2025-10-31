@@ -34,11 +34,41 @@ export async function checkServiceStatus(url: string): Promise<StatusCheckResult
   } catch (error: any) {
     const responseTime = Date.now() - startTime;
     
+    // Build a more detailed error message
+    let errorMessage = "Unknown error occurred";
+    
+    if (error.code === "ECONNREFUSED") {
+      errorMessage = "Connection refused - Service is not responding";
+    } else if (error.code === "ENOTFOUND") {
+      errorMessage = "DNS lookup failed - Host not found";
+    } else if (error.code === "ETIMEDOUT" || error.code === "ECONNABORTED") {
+      errorMessage = "Request timeout - Service took too long to respond";
+    } else if (error.code === "ECONNRESET") {
+      errorMessage = "Connection reset - Service closed the connection";
+    } else if (error.code === "EHOSTUNREACH") {
+      errorMessage = "Host unreachable - Network path not available";
+    } else if (error.code === "ENETUNREACH") {
+      errorMessage = "Network unreachable - Cannot reach network";
+    } else if (error.code === "CERT_HAS_EXPIRED") {
+      errorMessage = "SSL certificate has expired";
+    } else if (error.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE") {
+      errorMessage = "SSL certificate verification failed";
+    } else if (error.response) {
+      // The request was made and the server responded with a status code
+      errorMessage = `HTTP ${error.response.status}: ${error.response.statusText || "Server error"}`;
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = `No response received: ${error.message || "Service unavailable"}`;
+    } else if (error.message) {
+      // Something happened in setting up the request
+      errorMessage = error.message;
+    }
+    
     return {
       status: CheckStatus.DOWN,
-      httpCode: null,
+      httpCode: error.response?.status || null,
       responseTime,
-      errorMessage: error.message || "Unknown error occurred",
+      errorMessage,
     };
   }
 }

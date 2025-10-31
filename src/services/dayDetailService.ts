@@ -32,6 +32,7 @@ export interface DayDetailData {
   incidents?: Array<{
     timestamp: string; // UTC ISO timestamp
     error: string;
+    httpCode?: number | null;
   }>;
   timelineData?: Array<{
     time: string;

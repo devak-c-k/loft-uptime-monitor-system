@@ -70,6 +70,7 @@ export async function GET(request: Request) {
         response_time: true,
         checked_at: true,
         error_message: true,
+        http_code: true,
       },
     });
 
@@ -137,13 +138,23 @@ export async function GET(request: Request) {
       };
     }).filter(h => h.totalChecks > 0); // Only return hours with data
 
-    // Get incidents (downtime periods) - send raw timestamps
+    // Get incidents (downtime periods) - send raw timestamps with status codes
     const incidents = checks
       .filter(c => c.status === "DOWN")
-      .map(c => ({
-        timestamp: c.checked_at, // Send UTC timestamp, format in frontend
-        error: c.error_message || "Service unavailable",
-      }));
+      .map(c => {
+        let errorMessage = c.error_message || "Service unavailable";
+        
+        // Only prepend status code if it's not already in the error message
+        if (c.http_code && !errorMessage.startsWith("HTTP")) {
+          errorMessage = `HTTP ${c.http_code}: ${errorMessage}`;
+        }
+        
+        return {
+          timestamp: c.checked_at, // Send UTC timestamp, format in frontend
+          error: errorMessage,
+          httpCode: c.http_code,
+        };
+      });
 
     // Format checks for timeline
     const timelineData = checks.map(c => ({

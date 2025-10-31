@@ -15,7 +15,7 @@ interface DowntimeTracker {
 const downtimeTrackers = new Map<string, DowntimeTracker>();
 
 // Constants
-const ALERT_THRESHOLD_CHECKS = 4; // 4 failures = 2 minutes (30 seconds * 4)
+const ALERT_THRESHOLD_CHECKS = 2; // 4 failures = 2 minutes (30 seconds * 4)
 const CHECK_INTERVAL_SECONDS = 30;
 
 // Global singleton to ensure only ONE scheduler instance across all server instances

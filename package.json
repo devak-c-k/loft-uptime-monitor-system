@@ -14,6 +14,7 @@
     "@upstash/qstash": "^2.8.4",
     "axios": "^1.12.2",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "next": "15.5.4",
